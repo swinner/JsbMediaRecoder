@@ -61,6 +61,7 @@ import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
@@ -458,6 +459,8 @@ public class Camera2VideoActivity extends FragmentActivity {
         findViewById(R.id.btn_close).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                closeCamera();
+                stopBackgroundThread();
                 finish();
             }
         });
@@ -475,13 +478,7 @@ public class Camera2VideoActivity extends FragmentActivity {
         progressBar = (VideoProgressBar) findViewById(R.id.main_progress_bar);
         progressBar.setOnProgressEndListener(listener);
         progressBar.setCancel(true);
-    }
 
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        progressBar.setCancel(true);
         //disable rotation
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         startBackgroundThread();
@@ -492,10 +489,15 @@ public class Camera2VideoActivity extends FragmentActivity {
         }
     }
 
+
+    @Override
+    public void onResume() {
+        super.onResume();
+
+    }
+
     @Override
     public void onPause() {
-        closeCamera();
-        stopBackgroundThread();
         super.onPause();
     }
 
@@ -503,6 +505,20 @@ public class Camera2VideoActivity extends FragmentActivity {
     protected void onDestroy() {
         super.onDestroy();
     }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK
+                && event.getAction() == KeyEvent.ACTION_DOWN) {
+            closeCamera();
+            stopBackgroundThread();
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+
+
+
     boolean doRecord = false;
     View.OnTouchListener btnTouch = new View.OnTouchListener() {
         @Override
@@ -647,6 +663,7 @@ public class Camera2VideoActivity extends FragmentActivity {
     private View.OnClickListener backClick = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
+            unlockFocus(true);
             send.stopAnim();
             recordLayout.setVisibility(View.VISIBLE);
             // mediaUtils.deleteTargetFile();
@@ -657,10 +674,7 @@ public class Camera2VideoActivity extends FragmentActivity {
     private View.OnClickListener selectClick = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            String savePath = "";
-            savePath = getVideoFilePath(ctx);
-
-            Toast.makeText(ctx, "文件以保存至：" + savePath, Toast.LENGTH_SHORT).show();
+            unlockFocus(true);
             send.stopAnim();
             recordLayout.setVisibility(View.VISIBLE);
             btnInfo.setText("轻触拍照，长按摄像");
@@ -1324,7 +1338,7 @@ public class Camera2VideoActivity extends FragmentActivity {
                                                @NonNull TotalCaptureResult result) {
                     showToast("Saved: " + getPictureFilePath(ctx));
                     Log.d(TAG, getPictureFilePath(ctx));
-                    unlockFocus();
+                    unlockFocus(false);
                 }
             };
 
@@ -1347,19 +1361,26 @@ public class Camera2VideoActivity extends FragmentActivity {
      * Unlock the focus. This method should be called when still image capture sequence is
      * finished.
      */
-    private void unlockFocus() {
+    private void unlockFocus(boolean toPreview) {
         try {
-            // Reset the auto-focus trigger
-            mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            //setAutoFlash(mPreviewBuilder);
-            mPreviewSession.capture(mPreviewBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
-            // After this, the camera will go back to the normal state of preview.
+            if(toPreview){
+                if(mPreviewBuilder != null){
+                    // Reset the auto-focus trigger
+                    mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                            CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+                }
+                if(mPreviewSession != null && mPreviewBuilder != null){
+                    mPreviewSession.setRepeatingRequest(mPreviewBuilder.build(), mCaptureCallback,
+                            mBackgroundHandler);
+                }
+            }else{
+                if(mPreviewSession != null && mPreviewBuilder != null){
+                    mPreviewSession.capture(mPreviewBuilder.build(), mCaptureCallback,
+                            mBackgroundHandler);
+                }
+            }
             mState = STATE_PREVIEW;
-            mPreviewSession.setRepeatingRequest(mPreviewBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
-        } catch (CameraAccessException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
