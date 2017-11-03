@@ -264,6 +264,44 @@ public class Camera2VideoActivity extends FragmentActivity
         Log.e(TAG, "Couldn't find any suitable video size");
         return choices[choices.length - 1];
     }
+    private static Size chooseVideoSize(Size[] choices,int wScreen,int hScreen) {
+        List<Size> bigEnough = new ArrayList<>();
+        double scale = (double)hScreen/(double)wScreen;
+        for (Size size : choices) {
+            double optionScale = (double)size.getWidth()/(double)size.getHeight();
+            if (optionScale == scale) {
+                bigEnough.add(size);
+            }
+        }
+        // Pick the smallest of those, assuming we found any
+        if (bigEnough.size() > 0) {
+            return Collections.max(bigEnough, new CompareSizesByArea());
+        } else {
+            Log.e(TAG, "Couldn't find any suitable preview size");
+            for (Size size : choices) {
+                double optionScale = (double)size.getWidth()/(double)size.getHeight();
+                if (scale-0.1 < optionScale && optionScale < scale + 0.1) {
+                    bigEnough.add(size);
+                }
+            }
+            if (bigEnough.size() > 0) {
+                return Collections.max(bigEnough, new CompareSizesByArea());
+            } else {
+                Log.e(TAG, "Couldn't find any suitable preview size");
+                for (Size size : choices) {
+                    double optionScale = (double)size.getWidth()/(double)size.getHeight();
+                    if (scale-0.2 < optionScale && optionScale < scale + 0.2) {
+                        bigEnough.add(size);
+                    }
+                }
+                if (bigEnough.size() > 0) {
+                    return Collections.max(bigEnough, new CompareSizesByArea());
+                } else {
+                    return choices[0];
+                }
+            }
+        }
+    }
 
     /**
      * Given {@code choices} of {@code Size}s supported by a camera, chooses the smallest one whose
@@ -276,24 +314,80 @@ public class Camera2VideoActivity extends FragmentActivity
      * @param aspectRatio The aspect ratio
      * @return The optimal {@code Size}, or an arbitrary one if none were big enough
      */
-    private static Size chooseOptimalSize(Size[] choices, int width, int height, Size aspectRatio) {
+    private static Size chooseOptimalSize(Size[] choices, int width, int height,Size aspectRatio) {
         // Collect the supported resolutions that are at least as big as the preview Surface
         List<Size> bigEnough = new ArrayList<>();
-        int w = aspectRatio.getWidth();
-        int h = aspectRatio.getHeight();
+        double scale = (double)height/(double)width;
         for (Size option : choices) {
-            if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() >= width && option.getHeight() >= height) {
+            double optionScale = (double)option.getWidth()/(double)option.getHeight();
+            if (optionScale == scale) {
                 bigEnough.add(option);
             }
         }
-
         // Pick the smallest of those, assuming we found any
         if (bigEnough.size() > 0) {
-            return Collections.min(bigEnough, new CompareSizesByArea());
+            return Collections.max(bigEnough, new CompareSizesByArea());
         } else {
-            Log.e(TAG, "Couldn't find any suitable preview size");
-            return choices[0];
+            for (Size option : choices) {
+                double optionScale = (double)option.getWidth()/(double)option.getHeight();
+                if (scale-0.1 < optionScale && optionScale < scale + 0.1) {
+                    bigEnough.add(option);
+                }
+            }
+            if (bigEnough.size() > 0) {
+                return Collections.max(bigEnough, new CompareSizesByArea());
+            } else {
+                for (Size option : choices) {
+                    double optionScale = (double)option.getWidth()/(double)option.getHeight();
+                    if (scale-0.2 < optionScale && optionScale < scale + 0.2) {
+                        bigEnough.add(option);
+                    }
+                }
+                if (bigEnough.size() > 0) {
+                    return Collections.max(bigEnough, new CompareSizesByArea());
+                } else {
+                    Log.e(TAG, "Couldn't find any suitable preview size");
+                    return choices[0];
+                }
+            }
+        }
+    }
+    private static Size chooseOptimalSize(Size[] choices,Size aspectRatio) {
+        // Collect the supported resolutions that are at least as big as the preview Surface
+        List<Size> bigEnough = new ArrayList<>();
+        double scale = (double) aspectRatio.getWidth()/(double)aspectRatio.getHeight();
+        for (Size option : choices) {
+            double optionScale = (double)option.getWidth()/(double)option.getHeight();
+            if (optionScale == scale) {
+                bigEnough.add(option);
+            }
+        }
+        // Pick the smallest of those, assuming we found any
+        if (bigEnough.size() > 0) {
+            return Collections.max(bigEnough, new CompareSizesByArea());
+        } else {
+            for (Size option : choices) {
+                double optionScale = (double)option.getWidth()/(double)option.getHeight();
+                if (scale-0.1 < optionScale && optionScale < scale + 0.1) {
+                    bigEnough.add(option);
+                }
+            }
+            if (bigEnough.size() > 0) {
+                return Collections.max(bigEnough, new CompareSizesByArea());
+            } else {
+                for (Size option : choices) {
+                    double optionScale = (double)option.getWidth()/(double)option.getHeight();
+                    if (scale-0.2 < optionScale && optionScale < scale + 0.2) {
+                        bigEnough.add(option);
+                    }
+                }
+                if (bigEnough.size() > 0) {
+                    return Collections.max(bigEnough, new CompareSizesByArea());
+                } else {
+                    Log.e(TAG, "Couldn't find any suitable preview size");
+                    return choices[0];
+                }
+            }
         }
     }
 
@@ -662,17 +756,18 @@ public class Camera2VideoActivity extends FragmentActivity
             }
 
             //  mVideoSize = new Size(640, 360);
-            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
+            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class),width, height);
 //            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
 //                    width, height, mVideoSize);
+            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), mVideoSize);
 
-            mPreviewSize = new Size(heightScreen, widthScreen);
+            // mPreviewSize = new Size(1920, 1080);
 
             int orientation = getResources().getConfiguration().orientation;
             if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                mTextureView.setAspectRatio(heightScreen, widthScreen);
             } else {
-                mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                mTextureView.setAspectRatio(widthScreen, heightScreen);
             }
             configureTransform(width, height);
 
