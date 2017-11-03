@@ -923,7 +923,7 @@ public class Camera2VideoActivity extends FragmentActivity
 //        mMediaRecorder.setVideoSize(sz.getWidth(), sz.getHeight());
 
         mMediaRecorder.setVideoEncodingBitRate(5000000);
-        mMediaRecorder.setVideoFrameRate(30);
+        mMediaRecorder.setVideoFrameRate(20);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
 
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
@@ -963,7 +963,7 @@ public class Camera2VideoActivity extends FragmentActivity
             SurfaceTexture texture = mTextureView.getSurfaceTexture();
             assert texture != null;
             texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+            mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             List<Surface> surfaces = new ArrayList<>();
 
             // Set up Surface for the camera preview
@@ -978,6 +978,7 @@ public class Camera2VideoActivity extends FragmentActivity
 
             // Start a capture session
             // Once the session starts, we can update the UI and start recording
+
             mCameraDevice.createCaptureSession(surfaces, new CameraCaptureSession.StateCallback() {
 
                 @Override
