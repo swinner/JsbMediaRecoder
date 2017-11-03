@@ -48,7 +48,6 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
-import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
@@ -82,8 +81,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-public class Camera2VideoActivity extends FragmentActivity
-        implements  FragmentCompat.OnRequestPermissionsResultCallback {
+public class Camera2VideoActivity extends FragmentActivity {
 
     private static final int SENSOR_ORIENTATION_DEFAULT_DEGREES = 90;
     private static final int SENSOR_ORIENTATION_INVERSE_DEGREES = 270;
@@ -141,7 +139,7 @@ public class Camera2VideoActivity extends FragmentActivity
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture,
                                               int width, int height) {
-            openCamera(width, height);
+            openCamera(width, height, mCameraOrientation);
         }
 
         @Override
@@ -203,10 +201,7 @@ public class Camera2VideoActivity extends FragmentActivity
     View view;
 
 
-
-
-
-    long startTime=0L,timeinMillisecods=0L,timeSwapBuff=0L,updateTime=0L;
+    long startTime = 0L, timeinMillisecods = 0L, timeSwapBuff = 0L, updateTime = 0L;
 
     /**
      * {@link CameraDevice.StateCallback} is called when {@link CameraDevice} changes its status.
@@ -221,6 +216,8 @@ public class Camera2VideoActivity extends FragmentActivity
             if (null != mTextureView) {
                 configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
             }
+            isSwitchCameraOk = true;
+            switchCameraTime = System.currentTimeMillis();
         }
 
         @Override
@@ -228,6 +225,7 @@ public class Camera2VideoActivity extends FragmentActivity
             mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
+            isSwitchCameraOk = false;
         }
 
         @Override
@@ -235,6 +233,7 @@ public class Camera2VideoActivity extends FragmentActivity
             mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
+            isSwitchCameraOk = false;
             if (null != ctx) {
                 ctx.finish();
             }
@@ -245,7 +244,6 @@ public class Camera2VideoActivity extends FragmentActivity
     private String mNextVideoAbsolutePath;
     private CaptureRequest.Builder mPreviewBuilder;
     private Camera2VideoActivity ctx;
-
 
 
     /**
@@ -264,11 +262,12 @@ public class Camera2VideoActivity extends FragmentActivity
         Log.e(TAG, "Couldn't find any suitable video size");
         return choices[choices.length - 1];
     }
-    private static Size chooseVideoSize(Size[] choices,int wScreen,int hScreen) {
+
+    private static Size chooseVideoSize(Size[] choices, int wScreen, int hScreen) {
         List<Size> bigEnough = new ArrayList<>();
-        double scale = (double)hScreen/(double)wScreen;
+        double scale = (double) hScreen / (double) wScreen;
         for (Size size : choices) {
-            double optionScale = (double)size.getWidth()/(double)size.getHeight();
+            double optionScale = (double) size.getWidth() / (double) size.getHeight();
             if (optionScale == scale) {
                 bigEnough.add(size);
             }
@@ -279,8 +278,8 @@ public class Camera2VideoActivity extends FragmentActivity
         } else {
             Log.e(TAG, "Couldn't find any suitable preview size");
             for (Size size : choices) {
-                double optionScale = (double)size.getWidth()/(double)size.getHeight();
-                if (scale-0.1 < optionScale && optionScale < scale + 0.1) {
+                double optionScale = (double) size.getWidth() / (double) size.getHeight();
+                if (scale - 0.1 < optionScale && optionScale < scale + 0.1) {
                     bigEnough.add(size);
                 }
             }
@@ -289,8 +288,8 @@ public class Camera2VideoActivity extends FragmentActivity
             } else {
                 Log.e(TAG, "Couldn't find any suitable preview size");
                 for (Size size : choices) {
-                    double optionScale = (double)size.getWidth()/(double)size.getHeight();
-                    if (scale-0.2 < optionScale && optionScale < scale + 0.2) {
+                    double optionScale = (double) size.getWidth() / (double) size.getHeight();
+                    if (scale - 0.2 < optionScale && optionScale < scale + 0.2) {
                         bigEnough.add(size);
                     }
                 }
@@ -314,12 +313,12 @@ public class Camera2VideoActivity extends FragmentActivity
      * @param aspectRatio The aspect ratio
      * @return The optimal {@code Size}, or an arbitrary one if none were big enough
      */
-    private static Size chooseOptimalSize(Size[] choices, int width, int height,Size aspectRatio) {
+    private static Size chooseOptimalSize(Size[] choices, int width, int height, Size aspectRatio) {
         // Collect the supported resolutions that are at least as big as the preview Surface
         List<Size> bigEnough = new ArrayList<>();
-        double scale = (double)height/(double)width;
+        double scale = (double) height / (double) width;
         for (Size option : choices) {
-            double optionScale = (double)option.getWidth()/(double)option.getHeight();
+            double optionScale = (double) option.getWidth() / (double) option.getHeight();
             if (optionScale == scale) {
                 bigEnough.add(option);
             }
@@ -329,8 +328,8 @@ public class Camera2VideoActivity extends FragmentActivity
             return Collections.max(bigEnough, new CompareSizesByArea());
         } else {
             for (Size option : choices) {
-                double optionScale = (double)option.getWidth()/(double)option.getHeight();
-                if (scale-0.1 < optionScale && optionScale < scale + 0.1) {
+                double optionScale = (double) option.getWidth() / (double) option.getHeight();
+                if (scale - 0.1 < optionScale && optionScale < scale + 0.1) {
                     bigEnough.add(option);
                 }
             }
@@ -338,8 +337,8 @@ public class Camera2VideoActivity extends FragmentActivity
                 return Collections.max(bigEnough, new CompareSizesByArea());
             } else {
                 for (Size option : choices) {
-                    double optionScale = (double)option.getWidth()/(double)option.getHeight();
-                    if (scale-0.2 < optionScale && optionScale < scale + 0.2) {
+                    double optionScale = (double) option.getWidth() / (double) option.getHeight();
+                    if (scale - 0.2 < optionScale && optionScale < scale + 0.2) {
                         bigEnough.add(option);
                     }
                 }
@@ -352,12 +351,13 @@ public class Camera2VideoActivity extends FragmentActivity
             }
         }
     }
-    private static Size chooseOptimalSize(Size[] choices,Size aspectRatio) {
+
+    private static Size chooseOptimalSize(Size[] choices, Size aspectRatio) {
         // Collect the supported resolutions that are at least as big as the preview Surface
         List<Size> bigEnough = new ArrayList<>();
-        double scale = (double) aspectRatio.getWidth()/(double)aspectRatio.getHeight();
+        double scale = (double) aspectRatio.getWidth() / (double) aspectRatio.getHeight();
         for (Size option : choices) {
-            double optionScale = (double)option.getWidth()/(double)option.getHeight();
+            double optionScale = (double) option.getWidth() / (double) option.getHeight();
             if (optionScale == scale) {
                 bigEnough.add(option);
             }
@@ -367,8 +367,8 @@ public class Camera2VideoActivity extends FragmentActivity
             return Collections.max(bigEnough, new CompareSizesByArea());
         } else {
             for (Size option : choices) {
-                double optionScale = (double)option.getWidth()/(double)option.getHeight();
-                if (scale-0.1 < optionScale && optionScale < scale + 0.1) {
+                double optionScale = (double) option.getWidth() / (double) option.getHeight();
+                if (scale - 0.1 < optionScale && optionScale < scale + 0.1) {
                     bigEnough.add(option);
                 }
             }
@@ -376,8 +376,8 @@ public class Camera2VideoActivity extends FragmentActivity
                 return Collections.max(bigEnough, new CompareSizesByArea());
             } else {
                 for (Size option : choices) {
-                    double optionScale = (double)option.getWidth()/(double)option.getHeight();
-                    if (scale-0.2 < optionScale && optionScale < scale + 0.2) {
+                    double optionScale = (double) option.getWidth() / (double) option.getHeight();
+                    if (scale - 0.2 < optionScale && optionScale < scale + 0.2) {
                         bigEnough.add(option);
                     }
                 }
@@ -394,9 +394,10 @@ public class Camera2VideoActivity extends FragmentActivity
     private boolean isCancel;
     private VideoProgressBar progressBar;
     private int mProgress;
-    private TextView btnInfo , btn;
+    private TextView btnInfo, btn;
     private SendView send;
     private RelativeLayout recordLayout, switchLayout;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -437,38 +438,32 @@ public class Camera2VideoActivity extends FragmentActivity
         progressBar = (VideoProgressBar) findViewById(R.id.main_progress_bar);
         progressBar.setOnProgressEndListener(listener);
         progressBar.setCancel(true);
-
-        //disable rotation
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        startBackgroundThread();
-        if (mTextureView.isAvailable()) {
-            openCamera(mTextureView.getWidth(), mTextureView.getHeight());
-        } else {
-            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
-        }
     }
-
-
-
-
 
 
     @Override
     public void onResume() {
         super.onResume();
         progressBar.setCancel(true);
-
+        //disable rotation
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        startBackgroundThread();
+        if (mTextureView.isAvailable()) {
+            openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mCameraOrientation);
+        } else {
+            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+        }
     }
 
     @Override
     public void onPause() {
+        closeCamera();
+        stopBackgroundThread();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
-        closeCamera();
-        stopBackgroundThread();
         super.onDestroy();
     }
 
@@ -536,12 +531,12 @@ public class Camera2VideoActivity extends FragmentActivity
     };
 
 
-    Handler handler = new Handler(){
+    Handler handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case 0:
-                    Log.e("kakakak","handleMessage==>"+mIsRecordingVideo);
+                    Log.e("kakakak", "handleMessage==>" + mIsRecordingVideo);
                     progressBar.setProgress(mProgress);
                     mProgress = mProgress + 1;
                     sendMessageDelayed(handler.obtainMessage(0), 100);
@@ -549,7 +544,6 @@ public class Camera2VideoActivity extends FragmentActivity
             }
         }
     };
-
 
 
     private void startView() {
@@ -647,74 +641,34 @@ public class Camera2VideoActivity extends FragmentActivity
         }
     }
 
-    /**
-     * Gets whether you should show UI with rationale for requesting permissions.
-     *
-     * @param permissions The permissions your app wants to request.
-     * @return Whether you can show permission rationale UI.
-     */
-    private boolean shouldShowRequestPermissionRationale(String[] permissions) {
-        for (String permission : permissions) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(ctx, permission)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
-    /**
-     * Requests permissions needed for recording video.
-     */
-    private void requestVideoPermissions() {
-        if (shouldShowRequestPermissionRationale(VIDEO_PERMISSIONS)) {
-            new ConfirmationDialog().show(getFragmentManager(), FRAGMENT_DIALOG);
-        } else {
-            ActivityCompat.requestPermissions(ctx, VIDEO_PERMISSIONS, REQUEST_VIDEO_PERMISSIONS);
-        }
-    }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        Log.d(TAG, "onRequestPermissionsResult");
-        if (requestCode == REQUEST_VIDEO_PERMISSIONS) {
-            if (grantResults.length == VIDEO_PERMISSIONS.length) {
-                for (int result : grantResults) {
-                    if (result != PackageManager.PERMISSION_GRANTED) {
-                        ErrorDialog.newInstance(getString(R.string.permission_request))
-                                .show(getFragmentManager(), FRAGMENT_DIALOG);
-                        break;
-                    }
-                }
-            } else {
-                ErrorDialog.newInstance(getString(R.string.permission_request))
-                        .show(getFragmentManager(), FRAGMENT_DIALOG);
-            }
-        } else {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
-    }
+    private static String CAMERA_BACK = "camera_back";//后置摄像头
+    private static String CAMERA_FRONT = "camera_front";//前置摄像头
+    private static long CAMERA_TIME = 600L;//切换摄像头的时间间隔
+    private String mCameraOrientation = CAMERA_BACK;//摄像头的方向，默认后置
+    private boolean isSwitchCameraOk = false;//是否切换摄像头成功
+    private long switchCameraTime = 0L;
 
-    private boolean hasPermissionsGranted(String[] permissions) {
-        for (String permission : permissions) {
-            if (ActivityCompat.checkSelfPermission(ctx, permission)
-                    != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
-        }
-        return true;
-    }
-    private static String  CAMERA_BACK = "camera_back";
-    private static String  CAMERA_FRONT = "camera_front";
-    private  String mCameraId = "";
     public void switchCamera() {
-        closeCamera();
-        reopenCamera();
+        Log.e("jakakalk", "switchCamera===>" + isSwitchCameraOk);
+        if (isSwitchCameraOk && (System.currentTimeMillis() - switchCameraTime) > CAMERA_TIME) {
+            isSwitchCameraOk = false;
+            if (mCameraOrientation.equals(CAMERA_BACK)) {//后置切前置
+                mCameraOrientation = CAMERA_FRONT;
+            } else {//qian置切后置
+                mCameraOrientation = CAMERA_BACK;
+            }
+            closeCamera();
+            reopenCamera(mCameraOrientation);
+        }else{
+            switchCameraTime = System.currentTimeMillis();
+        }
     }
 
-    public void reopenCamera() {
+    public void reopenCamera(String cameraOrientation) {
         if (mTextureView.isAvailable()) {
-            openCamera(mTextureView.getWidth(), mTextureView.getHeight());
+            openCamera(mTextureView.getWidth(), mTextureView.getHeight(), cameraOrientation);
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
@@ -723,12 +677,8 @@ public class Camera2VideoActivity extends FragmentActivity
     /**
      * Tries to open a {@link CameraDevice}. The result is listened by `mStateCallback`.
      */
-    @SuppressWarnings("MissingPermission")
-    private void openCamera(int width, int height) {
-        if (!hasPermissionsGranted(VIDEO_PERMISSIONS)) {
-            requestVideoPermissions();
-            return;
-        }
+
+    private void openCamera(int width, int height, String cameraOrientation) {
         if (null == ctx || ctx.isFinishing()) {
             return;
         }
@@ -738,13 +688,11 @@ public class Camera2VideoActivity extends FragmentActivity
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
-            String cameraId ="";
-            if(mCameraId.equals(CAMERA_BACK)){
+            String cameraId = "";
+            if (cameraOrientation.equals(CAMERA_FRONT)) {//前置
                 cameraId = manager.getCameraIdList()[1];
-                mCameraId = CAMERA_FRONT;
-            }else{
+            } else {
                 cameraId = manager.getCameraIdList()[0];
-                mCameraId = CAMERA_BACK;
             }
             // Choose the sizes for camera preview and video recording
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -756,7 +704,7 @@ public class Camera2VideoActivity extends FragmentActivity
             }
 
             //  mVideoSize = new Size(640, 360);
-            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class),width, height);
+            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class), width, height);
 //            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
 //                    width, height, mVideoSize);
             mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), mVideoSize);
@@ -771,16 +719,22 @@ public class Camera2VideoActivity extends FragmentActivity
             }
             configureTransform(width, height);
 
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
             manager.openCamera(cameraId, mStateCallback, null);
         } catch (CameraAccessException e) {
+            isSwitchCameraOk = false;
             Toast.makeText(ctx, "Cannot access the camera", Toast.LENGTH_SHORT).show();
             finish();
         } catch (NullPointerException e) {
             // Currently an NPE is thrown when the Camera2API is used but not supported on the
             // device this code runs.
+            isSwitchCameraOk = false;
             ErrorDialog.newInstance(getString(R.string.camera_error))
                     .show(getFragmentManager(), FRAGMENT_DIALOG);
         } catch (InterruptedException e) {
+            isSwitchCameraOk = false;
             throw new RuntimeException("Interrupted while trying to lock camera opening.");
         }
     }
