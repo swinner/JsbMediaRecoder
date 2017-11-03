@@ -2,6 +2,8 @@ package com.example.jsbmediarecoder;
 
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.content.Context;
+import android.graphics.Point;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -44,6 +46,8 @@ public class VideoRecorderActivity extends FragmentActivity {
     private RelativeLayout recordLayout, switchLayout;
     private VideoRecorderActivity ctx;
 
+    private int widthScreen = 0;
+    private int heightScreen = 0;
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,12 +56,14 @@ public class VideoRecorderActivity extends FragmentActivity {
         Toast.makeText(ctx, "5.1系统之下", Toast.LENGTH_SHORT).show();
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         SurfaceView surfaceView = (SurfaceView) findViewById(R.id.main_surface_view);
-        AutoFitTextureView mTextureView = (AutoFitTextureView)findViewById(R.id.texture);
 
-        // setting
-        mTextureView.setVisibility(View.GONE);
-        surfaceView.setVisibility(View.VISIBLE);
-        mediaUtils = new MediaUtils(this);
+        WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
+        Point h = new Point();
+        wm.getDefaultDisplay().getSize(h);
+        widthScreen = h.x;
+        heightScreen = h.y;
+
+        mediaUtils = new MediaUtils(this,widthScreen,heightScreen);
         mediaUtils.setRecorderType(MediaUtils.MEDIA_VIDEO);
         mediaUtils.setTargetDir(Environment.getExternalStoragePublicDirectory("mpviees"));
         mediaUtils.setTargetName(UUID.randomUUID() + ".mp4");
@@ -106,24 +112,23 @@ public class VideoRecorderActivity extends FragmentActivity {
 
 
 
+    boolean doRecord = false;
     View.OnTouchListener btnTouch = new View.OnTouchListener() {
         @Override
         public boolean onTouch(View v, MotionEvent event) {
             boolean ret = false;
             float downY = 0;
             int action = event.getAction();
-
             switch (v.getId()) {
                 case R.id.main_press_control: {
                     switch (action) {
                         case MotionEvent.ACTION_DOWN:
-                            mediaUtils.record();
-
-                            startView();
+                            doRecord = false;
+                            handler.sendEmptyMessageDelayed(99,300);
                             ret = true;
                             break;
                         case MotionEvent.ACTION_UP:
-                            if (!isCancel) {
+                            if(doRecord){
                                 if (mProgress == 0) {
                                     stopView(false);
                                     break;
@@ -131,26 +136,23 @@ public class VideoRecorderActivity extends FragmentActivity {
                                 if (mProgress < 10) {
                                     //时间太短不保存
                                     mediaUtils.stopRecordUnSave();
-                                    Toast.makeText(VideoRecorderActivity.this, "时间太短", Toast.LENGTH_SHORT).show();
-                                    stopView(false);
+                                    Toast.makeText(ctx, "时间太短", Toast.LENGTH_SHORT).show();
                                     break;
                                 }
                                 //停止录制
                                 mediaUtils.stopRecordSave();
-                                stopView(true);
-                            } else {
-
-                                //现在是取消状态,不保存
-                                mediaUtils.stopRecordUnSave();
-                                Toast.makeText(VideoRecorderActivity.this, "取消保存", Toast.LENGTH_SHORT).show();
-                                stopView(false);
+                            }else{
+                                handler.removeMessages(99);
+                                mediaUtils.takePhoto();
+                                btnInfo.setText("");
                             }
+
                             ret = false;
                             break;
                         case MotionEvent.ACTION_MOVE:
-                            float currentY = event.getY();
-                            isCancel = downY - currentY > 10;
-                            moveView();
+//                            float currentY = event.getY();
+//                            isCancel = downY - currentY > 10;
+                            //moveView();
                             break;
                     }
                 }
@@ -159,6 +161,8 @@ public class VideoRecorderActivity extends FragmentActivity {
             return ret;
         }
     };
+
+
 
     VideoProgressBar.OnProgressEndListener listener = new VideoProgressBar.OnProgressEndListener() {
         @Override
@@ -181,6 +185,11 @@ public class VideoRecorderActivity extends FragmentActivity {
                         sendMessageDelayed(handler.obtainMessage(0), 100);
                     }
                     break;
+                case 99:
+                    doRecord = true;
+                    mediaUtils.record();
+                    startView();
+                    break;
             }
         }
     };
@@ -188,29 +197,37 @@ public class VideoRecorderActivity extends FragmentActivity {
 
 
     private void startView() {
+        btnInfo.setText("");
         startAnim();
         mProgress = 0;
         handler.removeMessages(0);
         handler.sendMessage(handler.obtainMessage(0));
     }
 
-    private void moveView() {
-        if (isCancel) {
-            btnInfo.setText("");
-        } else {
-            btnInfo.setText("");
-        }
-    }
+//    private void moveView() {
+//        if (isCancel) {
+//            btnInfo.setText("");
+//        } else {
+//            btnInfo.setText("");
+//        }
+//    }
 
-    private void stopView(boolean isSave) {
-        stopAnim();
-        progressBar.setCancel(true);
-        mProgress = 0;
-        handler.removeMessages(0);
-        if (isSave) {
-            recordLayout.setVisibility(View.GONE);
-            send.startAnim();
-        }
+    private void stopView(final boolean isSave) {
+        ctx.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                stopAnim();
+                progressBar.setCancel(true);
+                mProgress = 0;
+                handler.removeMessages(0);
+                if (isSave) {
+                    recordLayout.setVisibility(View.GONE);
+                    send.startAnim();
+                }else{
+                    btnInfo.setText("轻触拍照，长按摄像");
+                }
+            }
+        });
     }
 
     private void startAnim() {

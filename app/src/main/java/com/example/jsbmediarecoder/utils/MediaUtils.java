@@ -1,6 +1,7 @@
 package com.example.jsbmediarecoder.utils;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
@@ -8,16 +9,17 @@ import android.media.MediaMetadataRetriever;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.util.Log;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.View;
+
 
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,13 +43,18 @@ public class MediaUtils implements SurfaceHolder.Callback {
     private int previewWidth, previewHeight;
     private int recorderType;
     private boolean isRecording;
-//    private GestureDetector mDetector;
+    //    private GestureDetector mDetector;
 //    private boolean isZoomIn = false;
     private int or = 90;
     private int cameraPosition = 1;//0代表前置摄像头，1代表后置摄像头
 
-    public MediaUtils(Activity activity) {
+    private int mWidthScreen = 0;
+    private int mHeightScreen = 0;
+
+    public MediaUtils(Activity activity,int widthScreen, int heightScreen) {
         this.activity = activity;
+        this.mWidthScreen = widthScreen;
+        this.mHeightScreen = heightScreen;
     }
 
     public void setRecorderType(int type) {
@@ -222,23 +229,35 @@ public class MediaUtils implements SurfaceHolder.Callback {
             try {
                 mCamera.setPreviewDisplay(holder);
                 Camera.Parameters parameters = mCamera.getParameters();
-                List<Camera.Size> mSupportedPreviewSizes = parameters.getSupportedPreviewSizes();
+
                 List<Camera.Size> mSupportedVideoSizes = parameters.getSupportedVideoSizes();
-                Camera.Size optimalSize = CameraHelper.getOptimalVideoSize(mSupportedVideoSizes,
-                        mSupportedPreviewSizes, mSurfaceView.getWidth(), mSurfaceView.getHeight());
+                List<Camera.Size> mSupportedPreviewSizes = parameters.getSupportedPreviewSizes();
+
+                Camera.Size mVideoSize = chooseVideoSize(mSupportedVideoSizes,mWidthScreen,mHeightScreen);
+                Camera.Size chooseVideoSize =chooseOptimalSize2(mSupportedPreviewSizes,mWidthScreen,mHeightScreen,mVideoSize);
+
+
+//                Camera.Size optimalSize = CameraHelper.getOptimalVideoSize(mSupportedVideoSizes,
+//                        mSupportedPreviewSizes, mSurfaceView.getWidth(), mSurfaceView.getHeight());
                 // Use the same size for recording profile.
-                previewWidth = optimalSize.width;
-                previewHeight = optimalSize.height;
+                previewWidth = chooseVideoSize.width;
+                previewHeight = chooseVideoSize.height;
+
                 parameters.setPreviewSize(previewWidth, previewHeight);
+                parameters.setJpegQuality(100); // 设置照片质量
+                if (parameters.getSupportedFocusModes().contains(android.hardware.Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+                    parameters.setFocusMode(android.hardware.Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);// 连续对焦模式
+                }
+
                 profile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
                 // 这里是重点，分辨率和比特率
                 // 分辨率越大视频大小越大，比特率越大视频越清晰
                 // 清晰度由比特率决定，视频尺寸和像素量由分辨率决定
                 // 比特率越高越清晰（前提是分辨率保持不变），分辨率越大视频尺寸越大。
-                profile.videoFrameWidth = optimalSize.width;
-                profile.videoFrameHeight = optimalSize.height;
+                profile.videoFrameWidth = mVideoSize.width;
+                profile.videoFrameHeight = mVideoSize.height;
                 // 这样设置 1080p的视频 大小在5M , 可根据自己需求调节
-                profile.videoBitRate = 2 * optimalSize.width * optimalSize.height;
+                profile.videoBitRate = 2 * mVideoSize.width * mVideoSize.height;
                 List<String> focusModes = parameters.getSupportedFocusModes();
                 if (focusModes != null) {
                     for (String mode : focusModes) {
@@ -250,6 +269,81 @@ public class MediaUtils implements SurfaceHolder.Callback {
                 mCamera.startPreview();
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+    }
+
+
+
+
+
+
+    private Camera.Size chooseVideoSize(List<Camera.Size> videoSizes, int wScreen, int hScreen) {
+        for (Camera.Size size : videoSizes) {
+            if (size.width == size.width * hScreen / wScreen) {
+                return size;
+            }
+        }
+        Log.e(TAG, "Couldn't find any suitable video size");
+        return Collections.min(videoSizes, new CompareSizesByArea2((float) wScreen, (float)  hScreen));
+        //return choices[0];
+    }
+
+    private  Camera.Size chooseOptimalSize2(List<Camera.Size> videoSizes,  int width, int height, Camera.Size aspectRatio) {
+        // Collect the supported resolutions that are at least as big as the preview Surface
+        List<Camera.Size> bigEnough = new ArrayList<>();
+        int w = aspectRatio.width;
+        int h = aspectRatio.height;
+        float screenScale = (float)height/(float)width;
+        for (Camera.Size option : videoSizes) {
+            //if (option.getHeight() == option.getWidth() * h / w) {
+            if(screenScale == ((float)option.width/(float)option.height)){
+                bigEnough.add(option);
+            }
+        }
+
+        // Pick the smallest of those, assuming we found any
+        if (bigEnough.size() > 0) {
+            return Collections.max(bigEnough, new CompareSizesByArea());
+        } else {
+            Log.e(TAG, "Couldn't find any suitable preview size");
+            return Collections.min(videoSizes, new CompareSizesByArea2((float) width, (float)  height));
+            //return choices[0];
+        }
+    }
+
+    /**
+     * Compares two {@code Size}s based on their areas.
+     */
+    static class CompareSizesByArea implements Comparator<Camera.Size> {
+
+        @Override
+        public int compare(Camera.Size lhs, Camera.Size rhs) {
+            // We cast here to ensure the multiplications won't overflow
+            return Long.signum((long) lhs.width * lhs.height -
+                    (long) rhs.width * rhs.height);
+        }
+
+    }
+
+
+    static class CompareSizesByArea2 implements Comparator<Camera.Size> {
+        float ratio;
+        public CompareSizesByArea2(float w,float h){
+            ratio = h/w;
+        }
+        @Override
+        public int compare(Camera.Size lhs, Camera.Size rhs) {
+            // We cast here to ensure the multiplications won't overflow
+            float r1= Math.abs((float) lhs.width/lhs.height - ratio);
+            float r2= Math.abs((float) rhs.width/rhs.height - ratio);
+            float r0 = r1 - r2;
+            if(r0 > 0.0f){
+                return 1;
+            }else if( r0 < 0.0f){
+                return -1;
+            }else {
+                return 0;
             }
         }
     }
@@ -399,6 +493,49 @@ public class MediaUtils implements SurfaceHolder.Callback {
                     startPreView(mSurfaceHolder);
                     cameraPosition = 1;
                     break;
+                }
+            }
+        }
+    }
+    private boolean mWaitForTakePhoto = false;
+    public void takePhoto() {
+        if (mCamera == null || mWaitForTakePhoto) {
+            return;
+        }
+        mWaitForTakePhoto = true;
+        mCamera.takePicture(null, null, new Camera.PictureCallback() {
+            @Override
+            public void onPictureTaken(byte[] data, Camera camera) {
+                onTakePhoto(data);
+                mWaitForTakePhoto = false;
+            }
+        });
+    }
+
+    private static String getPictureFilePath() {
+        File storageDir = Environment.getExternalStoragePublicDirectory("mpviees");
+        if(!storageDir.exists()){
+            storageDir.mkdirs();
+        }
+        File targetFile = new File(storageDir, UUID.randomUUID() + "pic.jpg");
+        return  targetFile.getAbsolutePath();
+    }
+
+    private void onTakePhoto(byte[] data) {
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(getPictureFilePath());
+            fos.write(data);
+            fos.flush();
+            //启动我的裁剪界面
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (null != fos) {
+                try {
+                    fos.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
         }
