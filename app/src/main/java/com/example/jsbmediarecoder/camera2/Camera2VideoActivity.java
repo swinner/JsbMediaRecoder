@@ -40,6 +40,8 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.MediaRecorder;
 import android.os.Build;
@@ -73,6 +75,7 @@ import com.example.jsbmediarecoder.widget.VideoProgressBar;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -262,44 +265,55 @@ public class Camera2VideoActivity extends FragmentActivity {
         Log.e(TAG, "Couldn't find any suitable video size");
         return choices[choices.length - 1];
     }
-
-    private static Size chooseVideoSize(Size[] choices, int wScreen, int hScreen) {
-        List<Size> bigEnough = new ArrayList<>();
-        double scale = (double) hScreen / (double) wScreen;
+//    @Deprecated
+//    private static Size chooseVideoSize(Size[] choices, int wScreen, int hScreen) {
+//        List<Size> bigEnough = new ArrayList<>();
+//        double scale = (double) hScreen / (double) wScreen;
+//        for (Size size : choices) {
+//            double optionScale = (double) size.getWidth() / (double) size.getHeight();
+//            if (optionScale == scale) {
+//                bigEnough.add(size);
+//            }
+//        }
+//        // Pick the smallest of those, assuming we found any
+//        if (bigEnough.size() > 0) {
+//            return Collections.max(bigEnough, new CompareSizesByArea());
+//        } else {
+//            Log.e(TAG, "Couldn't find any suitable preview size");
+//            for (Size size : choices) {
+//                double optionScale = (double) size.getWidth() / (double) size.getHeight();
+//                if (scale - 0.1 < optionScale && optionScale < scale + 0.1) {
+//                    bigEnough.add(size);
+//                }
+//            }
+//            if (bigEnough.size() > 0) {
+//                return Collections.max(bigEnough, new CompareSizesByArea());
+//            } else {
+//                Log.e(TAG, "Couldn't find any suitable preview size");
+//                for (Size size : choices) {
+//                    double optionScale = (double) size.getWidth() / (double) size.getHeight();
+//                    if (scale - 0.2 < optionScale && optionScale < scale + 0.2) {
+//                        bigEnough.add(size);
+//                    }
+//                }
+//                if (bigEnough.size() > 0) {
+//                    return Collections.max(bigEnough, new CompareSizesByArea());
+//                } else {
+//                    return choices[0];
+//                }
+//            }
+//        }
+//    }
+    private static Size chooseVideoSize(Size[] choices,int wScreen,int hScreen) {
         for (Size size : choices) {
-            double optionScale = (double) size.getWidth() / (double) size.getHeight();
-            if (optionScale == scale) {
-                bigEnough.add(size);
+            if (size.getWidth() == size.getHeight() * hScreen / wScreen) {
+                return size;
             }
         }
-        // Pick the smallest of those, assuming we found any
-        if (bigEnough.size() > 0) {
-            return Collections.max(bigEnough, new CompareSizesByArea());
-        } else {
-            Log.e(TAG, "Couldn't find any suitable preview size");
-            for (Size size : choices) {
-                double optionScale = (double) size.getWidth() / (double) size.getHeight();
-                if (scale - 0.1 < optionScale && optionScale < scale + 0.1) {
-                    bigEnough.add(size);
-                }
-            }
-            if (bigEnough.size() > 0) {
-                return Collections.max(bigEnough, new CompareSizesByArea());
-            } else {
-                Log.e(TAG, "Couldn't find any suitable preview size");
-                for (Size size : choices) {
-                    double optionScale = (double) size.getWidth() / (double) size.getHeight();
-                    if (scale - 0.2 < optionScale && optionScale < scale + 0.2) {
-                        bigEnough.add(size);
-                    }
-                }
-                if (bigEnough.size() > 0) {
-                    return Collections.max(bigEnough, new CompareSizesByArea());
-                } else {
-                    return choices[0];
-                }
-            }
-        }
+        Log.e(TAG, "Couldn't find any suitable video size");
+        List<Size> lst = Arrays.asList(choices);
+        return Collections.min(lst, new CompareSizesByArea2((float) wScreen, (float)  hScreen));
+        //return choices[0];
     }
 
     /**
@@ -388,6 +402,31 @@ public class Camera2VideoActivity extends FragmentActivity {
                     return choices[0];
                 }
             }
+        }
+    }
+
+
+    private static Size chooseOptimalSize2(Size[] choices, int width, int height, Size aspectRatio) {
+        // Collect the supported resolutions that are at least as big as the preview Surface
+        List<Size> bigEnough = new ArrayList<>();
+        int w = aspectRatio.getWidth();
+        int h = aspectRatio.getHeight();
+        float screenScale = (float)height/(float)width;
+        for (Size option : choices) {
+            //if (option.getHeight() == option.getWidth() * h / w) {
+            if(screenScale == ((float)option.getWidth()/(float)option.getHeight())){
+                bigEnough.add(option);
+            }
+        }
+
+        // Pick the smallest of those, assuming we found any
+        if (bigEnough.size() > 0) {
+            return Collections.max(bigEnough, new CompareSizesByArea());
+        } else {
+            Log.e(TAG, "Couldn't find any suitable preview size");
+            List<Size> lst = Arrays.asList(choices);
+            return Collections.min(lst, new CompareSizesByArea2((float) width, (float)  height));
+            //return choices[0];
         }
     }
 
@@ -651,7 +690,6 @@ public class Camera2VideoActivity extends FragmentActivity {
     private long switchCameraTime = 0L;
 
     public void switchCamera() {
-        Log.e("jakakalk", "switchCamera===>" + isSwitchCameraOk);
         if (isSwitchCameraOk && (System.currentTimeMillis() - switchCameraTime) > CAMERA_TIME) {
             isSwitchCameraOk = false;
             if (mCameraOrientation.equals(CAMERA_BACK)) {//后置切前置
@@ -661,8 +699,6 @@ public class Camera2VideoActivity extends FragmentActivity {
             }
             closeCamera();
             reopenCamera(mCameraOrientation);
-        }else{
-            switchCameraTime = System.currentTimeMillis();
         }
     }
 
@@ -707,7 +743,8 @@ public class Camera2VideoActivity extends FragmentActivity {
             mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class), width, height);
 //            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
 //                    width, height, mVideoSize);
-            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), mVideoSize);
+            mPreviewSize = chooseOptimalSize2(map.getOutputSizes(SurfaceTexture.class),
+                    width, height, mVideoSize);
 
             // mPreviewSize = new Size(1920, 1080);
 
@@ -1003,6 +1040,27 @@ public class Camera2VideoActivity extends FragmentActivity {
 
     }
 
+    static class CompareSizesByArea2 implements Comparator<Size> {
+        float ratio;
+        public CompareSizesByArea2(float w,float h){
+            ratio = h/w;
+        }
+        @Override
+        public int compare(Size lhs, Size rhs) {
+            // We cast here to ensure the multiplications won't overflow
+            float r1= Math.abs((float) lhs.getWidth()/lhs.getHeight() - ratio);
+            float r2= Math.abs((float) rhs.getWidth()/rhs.getHeight() - ratio);
+            float r0 = r1 - r2;
+            if(r0 > 0.0f){
+                return 1;
+            }else if( r0 < 0.0f){
+                return -1;
+            }else {
+                return 0;
+            }
+        }
+    }
+
     public static class ErrorDialog extends DialogFragment {
 
         private static final String ARG_MESSAGE = "message";
@@ -1028,34 +1086,139 @@ public class Camera2VideoActivity extends FragmentActivity {
                     })
                     .create();
         }
-
     }
 
-    public static class ConfirmationDialog extends DialogFragment {
 
-        @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            final Fragment parent = getParentFragment();
-            return new AlertDialog.Builder(getActivity())
-                    .setMessage(R.string.permission_request)
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            FragmentCompat.requestPermissions(parent, VIDEO_PERMISSIONS,
-                                    REQUEST_VIDEO_PERMISSIONS);
-                        }
-                    })
-                    .setNegativeButton(android.R.string.cancel,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    parent.getActivity().finish();
-                                }
-                            })
-                    .create();
-        }
 
-    }
+
+
+
+
+
+    /**
+     * Camera state: Showing camera preview.
+     */
+    public static final int STATE_PREVIEW = 0;
+
+    /**
+     * Camera state: Waiting for the focus to be locked.
+     */
+    public static final int STATE_WAITING_LOCK = 1;
+
+    /**
+     * Camera state: Waiting for the exposure to be precapture state.
+     */
+    public static final int STATE_WAITING_PRECAPTURE = 2;
+
+    /**
+     * Camera state: Waiting for the exposure state to be something other than precapture.
+     */
+    public static final int STATE_WAITING_NON_PRECAPTURE = 3;
+
+    /**
+     * Camera state: Picture was taken.
+     */
+    public static final int STATE_PICTURE_TAKEN = 4;
+
+    /**
+     * Max preview width that is guaranteed by Camera2 API
+     */
+    public static final int MAX_PREVIEW_WIDTH = 1920;
+
+    /**
+     * Max preview height that is guaranteed by Camera2 API
+     */
+    public static final int MAX_PREVIEW_HEIGHT = 1080;
+    /**
+     * Initiate a still image capture.
+     */
+//    private void takePicture() {
+//        lockFocus();
+//    }
+    /**
+     * Lock the focus as the first step for a still image capture.
+     */
+//    private void lockFocus() {
+//        try {
+//            // This is how to tell the camera to lock focus.
+//            mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+//                    CameraMetadata.CONTROL_AF_TRIGGER_START);
+//            // Tell #mCaptureCallback to wait for the lock.
+//            mState = STATE_WAITING_LOCK;
+//            mCaptureSession.capture(mPreviewBuilder.build(), mCaptureCallback,
+//                    mBackgroundHandler);
+//        } catch (CameraAccessException e) {
+//            e.printStackTrace();
+//        }
+//    }
+//
+//    /**
+//     * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
+//     */
+//    private CameraCaptureSession.CaptureCallback mCaptureCallback
+//            = new CameraCaptureSession.CaptureCallback() {
+//
+//        private void process(CaptureResult result) {
+//            switch (mState) {
+//                case STATE_PREVIEW: {
+//                    // We have nothing to do when the camera preview is working normally.
+//                    break;
+//                }
+//                case STATE_WAITING_LOCK: {
+//                    Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
+//                    if (afState == null) {
+//                        captureStillPicture();
+//                    } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
+//                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
+//                        // CONTROL_AE_STATE can be null on some devices
+//                        Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
+//                        if (aeState == null ||
+//                                aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
+//                            mState = STATE_PICTURE_TAKEN;
+//                            captureStillPicture();
+//                        } else {
+//                            runPrecaptureSequence();
+//                        }
+//                    }
+//                    break;
+//                }
+//                case STATE_WAITING_PRECAPTURE: {
+//                    // CONTROL_AE_STATE can be null on some devices
+//                    Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
+//                    if (aeState == null ||
+//                            aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE ||
+//                            aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED) {
+//                        mState = STATE_WAITING_NON_PRECAPTURE;
+//                    }
+//                    break;
+//                }
+//                case STATE_WAITING_NON_PRECAPTURE: {
+//                    // CONTROL_AE_STATE can be null on some devices
+//                    Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
+//                    if (aeState == null || aeState != CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
+//                        mState = STATE_PICTURE_TAKEN;
+//                        captureStillPicture();
+//                    }
+//                    break;
+//                }
+//            }
+//        }
+//
+//        @Override
+//        public void onCaptureProgressed(@NonNull CameraCaptureSession session,
+//                                        @NonNull CaptureRequest request,
+//                                        @NonNull CaptureResult partialResult) {
+//            process(partialResult);
+//        }
+//
+//        @Override
+//        public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+//                                       @NonNull CaptureRequest request,
+//                                       @NonNull TotalCaptureResult result) {
+//            process(result);
+//        }
+//
+//    };
 
 
 }
