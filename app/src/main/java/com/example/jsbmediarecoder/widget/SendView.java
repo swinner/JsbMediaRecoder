@@ -34,8 +34,11 @@ public class SendView extends RelativeLayout {
         init(context);
     }
 
+    private int animatorWidth;
     private void init(Context context){
-        LayoutParams params = new LayoutParams(Utils.getInstance(context).getWidthPixels(), Utils.getInstance(context).dp2px(180f));
+        int widthPixels = Utils.getInstance(context).getWidthPixels();
+        animatorWidth = widthPixels * 3/10;
+        LayoutParams params = new LayoutParams(widthPixels, Utils.getInstance(context).dp2px(180f));
         setLayoutParams(params);
         RelativeLayout layout = (RelativeLayout) LayoutInflater.from(context).inflate(R.layout.widget_view_send_btn,null,false);
         layout.setLayoutParams(params);
@@ -49,8 +52,8 @@ public class SendView extends RelativeLayout {
         setVisibility(VISIBLE);
         AnimatorSet set = new AnimatorSet();
         set.playTogether(
-                ObjectAnimator.ofFloat(backLayout,"translationX",0,-360),
-                ObjectAnimator.ofFloat(selectLayout,"translationX",0,360)
+                ObjectAnimator.ofFloat(backLayout,"translationX",0,-animatorWidth),
+                ObjectAnimator.ofFloat(selectLayout,"translationX",0,animatorWidth)
         );
         set.setDuration(250).start();
     }
@@ -58,8 +61,8 @@ public class SendView extends RelativeLayout {
     public void stopAnim(){
         AnimatorSet set = new AnimatorSet();
         set.playTogether(
-                ObjectAnimator.ofFloat(backLayout,"translationX",-360,0),
-                ObjectAnimator.ofFloat(selectLayout,"translationX",360,0)
+                ObjectAnimator.ofFloat(backLayout,"translationX",-animatorWidth,0),
+                ObjectAnimator.ofFloat(selectLayout,"translationX",animatorWidth,0)
         );
         set.setDuration(250).start();
         setVisibility(GONE);

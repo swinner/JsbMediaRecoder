@@ -99,6 +99,7 @@ public class VideoProgressBar extends View {
 
     public void setCancel(boolean isCancel) {
         this.isCancel = isCancel;
+        this.progress = 0;
         invalidate();
     }
 

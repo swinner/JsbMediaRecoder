@@ -429,7 +429,6 @@ public class Camera2VideoActivity extends FragmentActivity {
         }
     }
 
-    private boolean isCancel;
     private VideoProgressBar progressBar;
     private int mProgress;
     private TextView btnInfo, btn;
@@ -459,8 +458,7 @@ public class Camera2VideoActivity extends FragmentActivity {
         findViewById(R.id.btn_close).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                takePicture();
-                //finish();
+                finish();
             }
         });
         send.backLayout.setOnClickListener(backClick);
@@ -505,51 +503,47 @@ public class Camera2VideoActivity extends FragmentActivity {
     protected void onDestroy() {
         super.onDestroy();
     }
-
+    boolean doRecord = false;
     View.OnTouchListener btnTouch = new View.OnTouchListener() {
         @Override
         public boolean onTouch(View v, MotionEvent event) {
             boolean ret = false;
             float downY = 0;
             int action = event.getAction();
-
             switch (v.getId()) {
                 case R.id.main_press_control: {
                     switch (action) {
                         case MotionEvent.ACTION_DOWN:
-                            startRecordingVideo();
-                            startView();
+                            doRecord = false;
+                            handler.sendEmptyMessageDelayed(99,300);
                             ret = true;
                             break;
                         case MotionEvent.ACTION_UP:
-                            if (!isCancel) {
+                            if(doRecord){
                                 if (mProgress == 0) {
                                     stopView(false);
                                     break;
                                 }
                                 if (mProgress < 10) {
                                     //时间太短不保存
-                                    stopRecordingVideo();//todo时间太短不保存
+                                    stopRecordingVideo(false);//todo时间太短不保存
                                     Toast.makeText(ctx, "时间太短", Toast.LENGTH_SHORT).show();
-                                    stopView(false);
                                     break;
                                 }
                                 //停止录制
-                                stopRecordingVideo();
-                                stopView(true);
-                            } else {
-
-                                //现在是取消状态,不保存
-                                stopRecordingVideo();//todo时间太短不保存
-                                Toast.makeText(ctx, "取消保存", Toast.LENGTH_SHORT).show();
-                                stopView(false);
+                                stopRecordingVideo(true);
+                            }else{
+                                handler.removeMessages(99);
+                                takePicture();
+                                btnInfo.setText("");
                             }
+
                             ret = false;
                             break;
                         case MotionEvent.ACTION_MOVE:
-                            float currentY = event.getY();
-                            isCancel = downY - currentY > 10;
-                            moveView();
+//                            float currentY = event.getY();
+//                            isCancel = downY - currentY > 10;
+                            //moveView();
                             break;
                     }
                 }
@@ -562,9 +556,14 @@ public class Camera2VideoActivity extends FragmentActivity {
     VideoProgressBar.OnProgressEndListener listener = new VideoProgressBar.OnProgressEndListener() {
         @Override
         public void onProgressEndListener() {
-            progressBar.setCancel(true);
+            ctx.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    progressBar.setCancel(true);
+                }
+            });
             //停止录制
-            stopRecordingVideo();//
+            stopRecordingVideo(true);//
         }
     };
 
@@ -579,35 +578,48 @@ public class Camera2VideoActivity extends FragmentActivity {
                     mProgress = mProgress + 1;
                     sendMessageDelayed(handler.obtainMessage(0), 100);
                     break;
+                case 99:
+                    doRecord = true;
+                    startRecordingVideo();
+                    startView();
+                    break;
             }
         }
     };
 
 
     private void startView() {
+        btnInfo.setText("");
         startAnim();
         mProgress = 0;
         handler.removeMessages(0);
         handler.sendMessage(handler.obtainMessage(0));
     }
 
-    private void moveView() {
-        if (isCancel) {
-            btnInfo.setText("");
-        } else {
-            btnInfo.setText("");
-        }
-    }
+//    private void moveView() {
+//        if (isCancel) {
+//            btnInfo.setText("");
+//        } else {
+//            btnInfo.setText("");
+//        }
+//    }
 
-    private void stopView(boolean isSave) {
-        stopAnim();
-        progressBar.setCancel(true);
-        mProgress = 0;
-        handler.removeMessages(0);
-        if (isSave) {
-            recordLayout.setVisibility(View.GONE);
-            send.startAnim();
-        }
+    private void stopView(final boolean isSave) {
+        ctx.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                stopAnim();
+                progressBar.setCancel(true);
+                mProgress = 0;
+                handler.removeMessages(0);
+                if (isSave) {
+                    recordLayout.setVisibility(View.GONE);
+                    send.startAnim();
+                }else{
+                    btnInfo.setText("轻触拍照，长按摄像");
+                }
+            }
+        });
     }
 
     private void startAnim() {
@@ -738,7 +750,11 @@ public class Camera2VideoActivity extends FragmentActivity {
                 throw new RuntimeException("Cannot get available preview/video sizes");
             }
 
-            mImageReader = ImageReader.newInstance(width, height,
+            // For still image captures, we use the largest available size.
+            Size largest = Collections.max(
+                    Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
+                    new CompareSizesByArea());
+            mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
                     ImageFormat.JPEG, /*maxImages*/2);
             mImageReader.setOnImageAvailableListener(
                     mOnImageAvailableListener, mBackgroundHandler);
@@ -1029,7 +1045,7 @@ public class Camera2VideoActivity extends FragmentActivity {
         }
     }
 
-    private void stopRecordingVideo() {
+    private void stopRecordingVideo(final boolean isSave) {
         // UI
 
         startPreview();
@@ -1046,6 +1062,7 @@ public class Camera2VideoActivity extends FragmentActivity {
 
         mIsRecordingVideo = false;
         mNextVideoAbsolutePath = null;
+        stopView(isSave);
     }
 
     /**
@@ -1356,6 +1373,7 @@ public class Camera2VideoActivity extends FragmentActivity {
         @Override
         public void onImageAvailable(ImageReader reader) {
             mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), getPictureFilePath(ctx)));
+            stopView(true);
         }
 
     };
