@@ -35,7 +35,7 @@ public class MainActivity extends FragmentActivity {
                             public void call(Boolean aBoolean) {
                                 if(aBoolean){
                                     Intent intent = new Intent();
-                                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+                                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP){
                                         intent.setClass(MainActivity.this,Camera2VideoActivity.class);
                                     }else{
                                         intent.setClass(MainActivity.this,VideoRecorderActivity.class);

@@ -219,6 +219,9 @@ public class MediaUtils implements SurfaceHolder.Callback {
             }
         }
     }
+    public void startPreView() {
+        startPreView(mSurfaceHolder);
+    }
 
     private void startPreView(SurfaceHolder holder) {
         if (mCamera == null) {
